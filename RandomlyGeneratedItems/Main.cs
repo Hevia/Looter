@@ -15,11 +15,11 @@ namespace RandomlyGeneratedItems
     [R2APISubmoduleDependency(nameof(LanguageAPI), nameof(ItemAPI), nameof(PrefabAPI), nameof(RecalculateStatsAPI))]
     public class Main : BaseUnityPlugin
     {
-        public const string PluginGUID = PluginAuthor + "." + PluginName;
-
-        public const string PluginAuthor = "HIFUPulse";
-        public const string PluginName = "RandomlyGeneratedItems";
+        public const string PluginAuthor = "Nudibranch";
+        public const string PluginName = "Looter";
         public const string PluginVersion = "0.0.3";
+
+        public const string PluginGUID = PluginAuthor + "." + PluginName;
 
         public static ConfigFile RGIConfig;
         public static ManualLogSource RGILogger;
@@ -35,15 +35,34 @@ namespace RandomlyGeneratedItems
         private static List<GameObject> itemModels = new();
         private static List<Sprite> itemIcons = new();
 
-        private static List<ItemDef> myItemDefs = new();
+        private static List<ItemDef> randItemDefs = new();
         private static Dictionary<string, Effect> map = new();
 
         public static Shader hgStandard;
 
-        // gonna make the statMult and tierMult configurable later down the line
+        public static ItemTierDef RandItemTier { get; private set; }
+
+        public static int EnumVal = 42;
 
         public void Awake()
         {
+            RandItemTier = ScriptableObject.CreateInstance<ItemTierDef>();
+            RandItemTier.bgIconTexture = Addressables.LoadAssetAsync<ItemTierDef>("RoR2/Base/Common/Tier3Def.asset").WaitForCompletion().bgIconTexture;
+            RandItemTier.colorIndex = ColorCatalog.ColorIndex.LunarItem;
+            RandItemTier.darkColorIndex = ColorCatalog.ColorIndex.LunarItemDark;
+            RandItemTier.name = "RandItemTier";
+            RandItemTier.isDroppable = false;
+            RandItemTier.canScrap = true;
+            RandItemTier.canRestack = true;
+            RandItemTier.pickupRules = ItemTierDef.PickupRules.Default;
+            RandItemTier._tier = (ItemTier)EnumVal;
+            RandItemTier.tier = (ItemTier)EnumVal;
+            RandItemTier.dropletDisplayPrefab = Addressables.LoadAssetAsync<ItemTierDef>("RoR2/Base/Common/Tier2Def.asset").WaitForCompletion().dropletDisplayPrefab;
+            RandItemTier.highlightPrefab = Addressables.LoadAssetAsync<ItemTierDef>("RoR2/Base/Common/Tier1Def.asset").WaitForCompletion().highlightPrefab;
+
+            R2API.ContentAddition.AddItemTierDef(RandItemTier);
+
+
             RGILogger = Logger;
             RGIConfig = Config; // seedconfig does nothing right now because config.bind.value returns a bepinex.configentry<ulong> instead of a plain ulong???
             seedConfig = Config.Bind<ulong>("Configuration:", "Seed", 0, "The seed that will be used for random generation. This MUST be the same between all clients in multiplayer!!! A seed of 0 will generate a random seed instead");
@@ -68,6 +87,7 @@ namespace RandomlyGeneratedItems
 
             // int maxItems = itemNamePrefix.Count < itemName.Count ? itemNamePrefix.Count : itemName.Count;
             int maxItems = Config.Bind("Configuration:", "Maximum Items", 30, "The maximum amount of items the mod will generate.").Value;
+            Logger.LogFatal("Generating " + maxItems + " items.");
 
             On.RoR2.ItemCatalog.Init += ItemCatalog_Init;
 
@@ -89,7 +109,7 @@ namespace RandomlyGeneratedItems
             On.RoR2.UI.MainMenu.BaseMainMenuScreen.Awake += (orig, self) =>
             {
                 orig(self);
-                foreach (ItemDef def in myItemDefs)
+                foreach (ItemDef def in randItemDefs)
                 {
                     var index = PickupCatalog.FindPickupIndex(def.itemIndex);
                     UserProfile.defaultProfile.DiscoverPickup(index);
@@ -122,14 +142,6 @@ namespace RandomlyGeneratedItems
                     {
                         ItemDef def = ItemCatalog.GetItemDef(index);
                         Effect effect;
-
-                        /*foreach (KeyValuePair<string, Effect> res in map) {
-                            Debug.Log("Key: " + res.Key);
-                            Debug.Log("Description: " + res.Value.description);
-                            Debug.Log("=====================================");
-                        }
-
-                        Debug.Log("Current Item: " + def.nameToken); */
 
                         bool found = map.TryGetValue(def.nameToken, out effect);
                         if (found && effect.effectType == Effect.EffectType.OnSkillUse && Util.CheckRoll(effect.chance, sender.master))
@@ -206,14 +218,6 @@ namespace RandomlyGeneratedItems
                         ItemDef def = ItemCatalog.GetItemDef(index);
                         Effect effect;
 
-                        /*foreach (KeyValuePair<string, Effect> res in map) {
-                            Debug.Log("Key: " + res.Key);
-                            Debug.Log("Description: " + res.Value.description);
-                            Debug.Log("=====================================");
-                        }
-
-                        Debug.Log("Current Item: " + def.nameToken); */
-
                         bool found = map.TryGetValue(def.nameToken, out effect);
                         if (found && effect.effectType == Effect.EffectType.OnHeal)
                         {
@@ -231,61 +235,6 @@ namespace RandomlyGeneratedItems
         private void ItemCatalog_Init(On.RoR2.ItemCatalog.orig_Init orig)
         {
             orig();
-            /* foreach (ItemDef def in ContentManager._itemDefs)
-            {
-                if (def.pickupModelPrefab) itemModels.Add(def.pickupModelPrefab);
-                if (def.pickupIconSprite) itemIcons.Add(def.pickupIconSprite);
-            }
-
-            foreach (BuffDef def in ContentManager._buffDefs)
-            {
-                if (def.iconSprite)
-                {
-                    var clone = Instantiate(def);
-                    itemIcons.Add(clone.iconSprite);
-                }
-            }
-
-            foreach (EquipmentDef def in ContentManager._equipmentDefs)
-            {
-                if (def.pickupModelPrefab)
-                {
-                    itemModels.Add(def.pickupModelPrefab);
-                    itemModels.Add(def.pickupModelPrefab);
-                    itemModels.Add(def.pickupModelPrefab);
-                }
-
-                if (def.pickupIconSprite)
-                {
-                    itemIcons.Add(def.pickupIconSprite);
-                    itemIcons.Add(def.pickupIconSprite);
-                }
-            }
-
-            Logger.LogFatal("modelList has " + itemModels.Count + " elements");
-            Logger.LogFatal("iconList has " + itemIcons.Count + " elements");
-
-            foreach (ItemDef itemDef in myItemDefs)
-            {
-                var modelRng2 = modelRng.Next(itemModels.Count);
-                var iconRng2 = iconRng.Next(itemIcons.Count); */
-            /*
-            if (itemModels.Count > 0)
-            {
-                itemDef.pickupModelPrefab = itemModels[modelRng2];
-                itemModels.RemoveAt(modelRng2);
-
-                Logger.LogFatal("itemmodels[modelRng2] is " + itemModels[modelRng2]);
-                itemModels.RemoveAt(modelRng2);
-            }
-            */
-            /* if (itemIcons.Count > 0)
-            {
-                itemDef.pickupIconSprite = itemIcons[iconRng2];
-                Logger.LogWarning("itemicons[iconRng2] is " + itemIcons[iconRng2]);
-                itemIcons.RemoveAt(iconRng2);
-            }
-        } */
         }
 
         private ItemDisplayRuleDict CreateItemDisplayRules()
@@ -296,7 +245,6 @@ namespace RandomlyGeneratedItems
         private void GenerateItem()
         {
             string itemName = "";
-            string logEntry = "";
             ItemTier tier;
 
             int attempts = 0;
@@ -307,31 +255,17 @@ namespace RandomlyGeneratedItems
             {
                 var prefixRng2 = rng.RangeInt(0, NameSystem.itemNamePrefix.Count);
                 var nameRng2 = rng.RangeInt(0, NameSystem.itemName.Count);
-                /* var logRng2 = rng.RangeInt(0, NameSystem.logDesc.Count);
-                var logLengthRng2 = rng.RangeInt(10, 60); */
                 itemName = "";
-                logEntry = "";
 
                 itemName += NameSystem.itemNamePrefix[prefixRng2] + " ";
-                // itemNamePrefix.RemoveAt(prefixRng2);
 
                 itemName += NameSystem.itemName[nameRng2];
-                // Main.itemName.RemoveAt(nameRng2);
 
                 xmlSafeItemName = itemName.ToUpper();
                 xmlSafeItemName = xmlSafeItemName.Replace(" ", "_").Replace("'", "").Replace("&", "AND");
 
-                /* for (int i = 0; i < logLengthRng2; i++)
-                {
-                    logEntry += NameSystem.itemNamePrefix[logRng2] + " ";
-                    if (i % 12 == 0)
-                    {
-                        logEntry += ".";
-                    }
-                } */
-
                 Effect buffer;
-                if (map.TryGetValue("ITEM_" + xmlSafeItemName + "_NAME", out buffer))
+                if (map.TryGetValue("RAND_ITEM_" + xmlSafeItemName + "_NAME", out buffer))
                 {
                     attempts++;
                 }
@@ -346,58 +280,25 @@ namespace RandomlyGeneratedItems
                 return;
             }
 
-            string log = "";
+            // TODO
+            string log = "loggy log";
 
-            int logLength = rng.RangeInt(0, 120);
-            for (int i = 0; i < logLength; i++)
-            {
-                int logRng = rng.RangeInt(0, NameSystem.logDesc.Count);
-                log += NameSystem.logDesc[logRng];
-                if (i % rng.RangeInt(8, 14) == 0)
-                {
-                    log += ". ";
-                }
-                else
-                {
-                    log += " ";
-                }
-            }
+            tier = (ItemTier)rng.RangeInt(0, 4);
 
-            tier = (ItemTier)rng.RangeInt(0, 3);
-
-            string translatedTier = "";
             float mult = 1f;
             float stackMult = 1f;
             Effect effect = new();
 
-            int objects = rng.RangeInt(2, 9);
+            int objects = rng.RangeInt(2, 4);
             PrimitiveType[] prims = {
                 PrimitiveType.Sphere,
                 PrimitiveType.Capsule,
                 PrimitiveType.Cylinder,
                 PrimitiveType.Cube,
             };
-            /*
-            Color32[] colors =
-            {
-                // top colors from paint.net with S turned down by 20 and V turned down by 30
-                // black is 0, 0, 15 hsv            //
-                // white is 0, 0, 85 hsv           //
-                new(178, 35, 35, 255),            // red
-                new(178, 92, 35, 255),           // orange
-                new(178, 154, 35, 255),         // yellow
-                new(35, 178, 52, 255),         // green
-                new(35, 178, 178, 255),       // blue
-                new(35, 57, 178, 255),       // dark blue
-                new(73, 35, 178, 255),      // violet
-                new(133, 35, 178, 255),    // magenta
-                new(38, 38, 38, 255),     // black
-                new(216, 216, 216, 255), // white
-            };
-            */
 
             GameObject first = GameObject.CreatePrimitive(prims[rng.RangeInt(0, prims.Length)]);
-            // first.GetComponent<MeshRenderer>().material.color = colors[rng.RangeInt(0, colors.Length)];
+
             for (int i = 0; i < objects; i++)
             {
                 GameObject prim = GameObject.CreatePrimitive(prims[rng.RangeInt(0, prims.Length)]);
@@ -436,13 +337,11 @@ namespace RandomlyGeneratedItems
             {
                 { ItemTier.Tier1, new Color(0.77f, 0.95f, 0.97f, 0.99f) },
                 { ItemTier.Tier2, Color.green },
-                { ItemTier.Tier3, Color.red }
+                { ItemTier.Tier3, Color.red },
             };
 
-            //Color color = new Color32((byte)rng.RangeInt(0, 256), (byte)rng.RangeInt(0, 256), (byte)rng.RangeInt(0, 256), (byte)rng.RangeInt(0, 256));
 
-            // Get the color for the item's tier
-
+            // Get the color for the item's tier.
             Color tierCol = tierColors[tier];
 
             // Calculate the RGB offset
@@ -457,88 +356,53 @@ namespace RandomlyGeneratedItems
             switch (tier)
             {
                 case ItemTier.Tier1:
-                    // tierCol = Color.white;
-                    translatedTier = "Common";
                     mult = 1f;
                     stackMult = 1f;
                     break;
 
                 case ItemTier.Tier2:
-                    // tierCol = Color.green;
-                    translatedTier = "Uncommon";
                     mult = 3.2f;
                     stackMult = 0.5f;
                     break;
 
                 case ItemTier.Tier3:
-                    // tierCol = Color.red;
-                    translatedTier = "Legendary";
                     mult = 12f;
                     stackMult = 0.15f;
                     break;
 
+
                 case ItemTier.Lunar:
-                    // tierCol = Color.blue;
-                    translatedTier = "Lunar";
                     mult = 1.8f;
                     stackMult = 0.5f;
                     break;
 
                 case ItemTier.VoidTier1:
-                    // tierCol = Color.magenta;
-                    translatedTier = "Void Common";
                     mult = 0.9f;
                     stackMult = 1f;
                     break;
 
                 case ItemTier.VoidTier2:
-                    // tierCol = Color.magenta;
-                    translatedTier = "Void Uncommon";
                     mult = 1.5f;
                     stackMult = 0.75f;
                     break;
 
                 case ItemTier.VoidTier3:
-                    // tierCol = Color.magenta;
-                    translatedTier = "Void Legendary";
                     mult = 2f;
                     stackMult = 0.45f;
                     break;
 
                 case ItemTier.VoidBoss:
-                    // tierCol = Color.magenta;
-                    translatedTier = "Void Yellow";
                     mult = 2f;
                     stackMult = 0.6f;
                     break;
 
                 default:
-                    // tierCol = Color.black;
-                    translatedTier = "BRO THIS SHOULDN'T BE HAPPENING";
                     mult = 1f;
                     stackMult = 1f;
                     break;
             }
 
             effect.Generate(rng, mult, stackMult);
-            /*
-            while (y < tex.height)
-            {
-                float x = 0.0F;
-                while (x < tex.width)
-                {
-                    float xCoord = sx + x / tex.width * scale;
-                    float yCoord = sy + y / tex.height * scale;
-                    float sample = Mathf.PerlinNoise(xCoord, yCoord);
-                    col[(int)y * tex.width + (int)x] = Color.Lerp(color, tierCol, sample);
-                    x++;
-                }
-                y++;
-            }
-
-            tex.SetPixels(col);
-            tex.Apply();
-            */
 
             int shape = rng.RangeInt(0, 3);
 
@@ -587,57 +451,6 @@ namespace RandomlyGeneratedItems
                                 col[y * tex.width + x] = new Color(0, 0, 0, 0);
                             }
                             break;
-                            /*
-                        case 3: // triangle
-                                // check if the current pixel is inside the triangle
-                            float halfWidth = tex.width / 2;
-                            float halfHeight = tex.height / 2;
-                            float xCoord2 = x - halfWidth;
-                            float yCoord2 = y - halfHeight;
-                            if (Mathf.Abs(xCoord2) + Mathf.Abs(yCoord2) <= halfWidth && yCoord2 <= xCoord2 && yCoord2 >= -xCoord2)
-                            {
-                                col[y * tex.width + x] = Color.Lerp(color, Color.black, sample);
-                            }
-                            else
-                            {
-                                col[y * tex.width + x] = new Color(0, 0, 0, 0);
-                            }
-                            break;
-
-                        case 4: // star
-                                // check if the current pixel is inside the star
-                            if (x >= tex.width / 3 && x <= tex.width * 2 / 3 && y >= tex.height / 3 && y <= tex.height * 2 / 3 && (y == tex.height / 2 || x == tex.width / 2))
-                            {
-                                col[y * tex.width + x] = Color.Lerp(color, Color.black, sample);
-                            }
-                            else
-                            {
-                                col[y * tex.width + x] = new Color(0, 0, 0, 0);
-                            }
-                            break;
-
-                        case 5: // crescent
-                                // check if the current pixel is inside the crescent
-                            if (x > tex.width / 4 && x < tex.width * 3 / 4 && y > tex.height / 4 && y < tex.height * 3 / 4)
-                            {
-                                float distanceFromCenter = Mathf.Sqrt(Mathf.Pow(x - tex.width / 2, 2) + Mathf.Pow(y - tex.height / 2, 2));
-                                if (distanceFromCenter > tex.width / 4 && distanceFromCenter < tex.width / 2)
-                                {
-                                    col[y * tex.width + x] = Color.Lerp(color, Color.black, sample);
-                                }
-                                else
-                                {
-                                    col[y * tex.width + x] = new Color(0, 0, 0, 0);
-                                }
-                            }
-                            else
-                            {
-                                col[y * tex.width + x] = new Color(0, 0, 0, 0);
-                            }
-                            break;
-                            */
-
-                            // these aren't accurate at all lmao
                     }
                 }
             }
@@ -646,30 +459,37 @@ namespace RandomlyGeneratedItems
 
             Sprite icon = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f));
 
+            // TODO: Add a try/catch?
+            Logger.LogDebug("DontDestroyOnLoad(tex): " + tex);
+            Logger.LogDebug("DontDestroyOnLoad(icon): " + icon);
             DontDestroyOnLoad(tex);
             DontDestroyOnLoad(icon);
 
+            Logger.LogDebug("Attempting to create an item named " + itemName);
             itemDef = ScriptableObject.CreateInstance<ItemDef>();
-            itemDef.name = "ITEM_" + xmlSafeItemName;
-            itemDef.nameToken = "ITEM_" + xmlSafeItemName + "_NAME";
-            itemDef.pickupToken = "ITEM_" + xmlSafeItemName + "_PICKUP";
-            itemDef.descriptionToken = "ITEM_" + xmlSafeItemName + "_DESCRIPTION";
-            itemDef.loreToken = "ITEM_" + xmlSafeItemName + "_LORE";
+            itemDef.name = "RAND_ITEM_" + xmlSafeItemName;
+            itemDef.nameToken = "RAND_ITEM_" + xmlSafeItemName + "_NAME";
+            itemDef.pickupToken = "RAND_ITEM_" + xmlSafeItemName + "_PICKUP";
+            itemDef.descriptionToken = "RAND_ITEM_" + xmlSafeItemName + "_DESCRIPTION";
+            itemDef.loreToken = "RAND_ITEM_" + xmlSafeItemName + "_LORE";
             itemDef.pickupModelPrefab = prefab;
             itemDef.pickupIconSprite = icon;
             itemDef.hidden = false;
-            itemDef.deprecatedTier = tier;
+            itemDef._itemTierDef = RandItemTier;
+            itemDef.tier = (ItemTier)EnumVal;
+            itemDef.deprecatedTier = (ItemTier)EnumVal;
 
             map.Add(itemDef.nameToken, effect);
+
+            ItemAPI.Add(new CustomItem(itemDef, CreateItemDisplayRules()));
+            randItemDefs.Add(itemDef);
 
             LanguageAPI.Add(itemDef.nameToken, itemName);
             LanguageAPI.Add(itemDef.pickupToken, effect.description);
             LanguageAPI.Add(itemDef.descriptionToken, effect.description);
             LanguageAPI.Add(itemDef.loreToken, log);
 
-            ItemAPI.Add(new CustomItem(itemDef, CreateItemDisplayRules()));
-            myItemDefs.Add(itemDef);
-            Logger.LogDebug("Generated a " + translatedTier + " item named " + itemName);
+            Logger.LogDebug("Generated an item named " + itemName);
         }
 
         private void RecalculateStatsAPI_GetStatCoefficients(CharacterBody sender, RecalculateStatsAPI.StatHookEventArgs args)
@@ -680,14 +500,6 @@ namespace RandomlyGeneratedItems
                 {
                     ItemDef def = ItemCatalog.GetItemDef(index);
                     Effect effect;
-
-                    /*foreach (KeyValuePair<string, Effect> res in map) {
-                        Debug.Log("Key: " + res.Key);
-                        Debug.Log("Description: " + res.Value.description);
-                        Debug.Log("=====================================");
-                    }
-
-                    Debug.Log("Current Item: " + def.nameToken); */
 
                     bool found = map.TryGetValue(def.nameToken, out effect);
                     if (found && effect.effectType == Effect.EffectType.Passive)
