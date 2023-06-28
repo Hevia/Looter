@@ -4,7 +4,10 @@ using BepInEx.Logging;
 using R2API;
 using R2API.Utils;
 using RoR2;
+using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 
@@ -40,32 +43,29 @@ namespace RandomlyGeneratedItems
 
         public static Shader hgStandard;
 
-        public static ItemTierDef RandItemTier { get; private set; }
+        public List<ArtifactBase> Artifacts = new List<ArtifactBase>();
 
-        public static int EnumVal = 42;
+        public RandItemContainer randItemContainer = RandItemContainer.Instance;
 
         public void Awake()
         {
-            RandItemTier = ScriptableObject.CreateInstance<ItemTierDef>();
-            RandItemTier.bgIconTexture = Addressables.LoadAssetAsync<ItemTierDef>("RoR2/Base/Common/Tier3Def.asset").WaitForCompletion().bgIconTexture;
-            RandItemTier.colorIndex = ColorCatalog.ColorIndex.LunarItem;
-            RandItemTier.darkColorIndex = ColorCatalog.ColorIndex.LunarItemDark;
-            RandItemTier.name = "RandItemTier";
-            RandItemTier.isDroppable = false;
-            RandItemTier.canScrap = true;
-            RandItemTier.canRestack = true;
-            RandItemTier.pickupRules = ItemTierDef.PickupRules.Default;
-            RandItemTier._tier = (ItemTier)EnumVal;
-            RandItemTier.tier = (ItemTier)EnumVal;
-            RandItemTier.dropletDisplayPrefab = Addressables.LoadAssetAsync<ItemTierDef>("RoR2/Base/Common/Tier2Def.asset").WaitForCompletion().dropletDisplayPrefab;
-            RandItemTier.highlightPrefab = Addressables.LoadAssetAsync<ItemTierDef>("RoR2/Base/Common/Tier1Def.asset").WaitForCompletion().highlightPrefab;
+           
+            R2API.ContentAddition.AddItemTierDef(randItemContainer.RandItemTier);
+          
+            var ArtifactTypes = Assembly.GetExecutingAssembly().GetTypes().Where(type => !type.IsAbstract && type.IsSubclassOf(typeof(ArtifactBase)));
+            foreach (var artifactType in ArtifactTypes)
+            {
+                ArtifactBase artifact = (ArtifactBase)Activator.CreateInstance(artifactType);
+                if (ValidateArtifact(artifact, Artifacts))
+                {
+                    artifact.Init(Config);
+                }
+            }
 
-            R2API.ContentAddition.AddItemTierDef(RandItemTier);
-
-
+            Log.Init(Logger);
             RGILogger = Logger;
             RGIConfig = Config; // seedconfig does nothing right now because config.bind.value returns a bepinex.configentry<ulong> instead of a plain ulong???
-            seedConfig = Config.Bind<ulong>("Configuration:", "Seed", 0, "The seed that will be used for random generation. This MUST be the same between all clients in multiplayer!!! A seed of 0 will generate a random seed instead");
+            seedConfig = Config.Bind<ulong>("Configuration:", "Seed", 264858, "The seed that will be used for random generation. This MUST be the same between all clients in multiplayer!!! A seed of 0 will generate a random seed instead");
 
             hgStandard = Addressables.LoadAssetAsync<Shader>("RoR2/Base/Shaders/HGStandard.shader").WaitForCompletion();
 
@@ -75,7 +75,7 @@ namespace RandomlyGeneratedItems
             }
             else
             {
-                seed = (ulong)Random.RandomRangeInt(0, 10000) ^ (ulong)Random.RandomRangeInt(1, 10) << 16;
+                seed = (ulong)UnityEngine.Random.RandomRangeInt(0, 10000) ^ (ulong)UnityEngine.Random.RandomRangeInt(1, 10) << 16;
             }
 
             rng = new(seed);
@@ -89,8 +89,6 @@ namespace RandomlyGeneratedItems
             int maxItems = Config.Bind("Configuration:", "Maximum Items", 30, "The maximum amount of items the mod will generate.").Value;
             Logger.LogFatal("Generating " + maxItems + " items.");
 
-            On.RoR2.ItemCatalog.Init += ItemCatalog_Init;
-
             Effect.ModifyPrefabs();
 
             for (int i = 0; i < maxItems; i++)
@@ -102,6 +100,8 @@ namespace RandomlyGeneratedItems
                 }
             }
 
+            On.RoR2.ItemCatalog.Init += ItemCatalog_Init;
+
             RecalculateStatsAPI.GetStatCoefficients += RecalculateStatsAPI_GetStatCoefficients;
 
             On.RoR2.GlobalEventManager.ServerDamageDealt += GlobalEventManager_ServerDamageDealt;
@@ -112,6 +112,7 @@ namespace RandomlyGeneratedItems
                 foreach (ItemDef def in randItemDefs)
                 {
                     var index = PickupCatalog.FindPickupIndex(def.itemIndex);
+                    Logger.LogInfo("Found " + def.name + " in the pickup catalog");
                     UserProfile.defaultProfile.DiscoverPickup(index);
                 }
             };
@@ -232,6 +233,16 @@ namespace RandomlyGeneratedItems
             };
         }
 
+        public bool ValidateArtifact(ArtifactBase artifact, List<ArtifactBase> artifactList)
+        {
+            var enabled = Config.Bind<bool>("Artifact: " + artifact.ArtifactName, "Enable Artifact?", true, "Should this artifact appear for selection?").Value;
+            if (enabled)
+            {
+                artifactList.Add(artifact);
+            }
+            return enabled;
+        }
+
         private void ItemCatalog_Init(On.RoR2.ItemCatalog.orig_Init orig)
         {
             orig();
@@ -244,6 +255,7 @@ namespace RandomlyGeneratedItems
 
         private void GenerateItem()
         {
+            Log.Info("DEBUGGER Enter GenerateItems()");
             string itemName = "";
             ItemTier tier;
 
@@ -289,7 +301,7 @@ namespace RandomlyGeneratedItems
             float stackMult = 1f;
             Effect effect = new();
 
-            int objects = rng.RangeInt(2, 4);
+            int objects = rng.RangeInt(1, 3);
             PrimitiveType[] prims = {
                 PrimitiveType.Sphere,
                 PrimitiveType.Capsule,
@@ -321,7 +333,16 @@ namespace RandomlyGeneratedItems
                 mr.sharedMaterial.color = new Color32((byte)rng.RangeInt(0, 255), (byte)rng.RangeInt(0, 255), (byte)rng.RangeInt(0, 255), 255);
             }
 
-            DontDestroyOnLoad(prefab);
+            Log.Info("DEBUGGER Prefab Created....");
+
+            try
+            {
+                DontDestroyOnLoad(prefab);
+            } catch (Exception e)
+            {
+                Log.Info("DEBUGGER DontDestroyOnLoad(prefab); failed...");
+            }
+            
 
             Texture2D tex = new(512, 512);
 
@@ -459,11 +480,23 @@ namespace RandomlyGeneratedItems
 
             Sprite icon = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f));
 
-            // TODO: Add a try/catch?
-            Logger.LogDebug("DontDestroyOnLoad(tex): " + tex);
-            Logger.LogDebug("DontDestroyOnLoad(icon): " + icon);
-            DontDestroyOnLoad(tex);
-            DontDestroyOnLoad(icon);
+            try
+            {
+                DontDestroyOnLoad(tex);
+            }
+            catch (Exception e)
+            {
+                Log.Info("DEBUGGER DontDestroyOnLoad(tex); failed...");
+            }
+
+            try
+            {
+                DontDestroyOnLoad(icon);
+            }
+            catch (Exception e)
+            {
+                Log.Info("DEBUGGER DontDestroyOnLoad(icon); failed...");
+            }
 
             Logger.LogDebug("Attempting to create an item named " + itemName);
             itemDef = ScriptableObject.CreateInstance<ItemDef>();
@@ -475,11 +508,18 @@ namespace RandomlyGeneratedItems
             itemDef.pickupModelPrefab = prefab;
             itemDef.pickupIconSprite = icon;
             itemDef.hidden = false;
-            itemDef._itemTierDef = RandItemTier;
-            itemDef.tier = (ItemTier)EnumVal;
-            itemDef.deprecatedTier = (ItemTier)EnumVal;
+            itemDef._itemTierDef = randItemContainer.RandItemTier;
 
-            map.Add(itemDef.nameToken, effect);
+            if (!map.ContainsKey(itemDef.nameToken))
+            {
+                map.Add(itemDef.nameToken, effect);
+            }
+            else
+            {
+                // Handle the case when the key already exists in the dictionary
+                // You might want to log an error or decide how to handle this situation
+                Logger.LogError("Key already exists in the map dictionary: " + itemDef.nameToken);
+            }
 
             ItemAPI.Add(new CustomItem(itemDef, CreateItemDisplayRules()));
             randItemDefs.Add(itemDef);
