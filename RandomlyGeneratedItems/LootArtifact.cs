@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.Networking;
 using RoR2;
 using UnityEngine.AddressableAssets;
+using System;
 
 namespace RandomlyGeneratedItems
 {
@@ -45,14 +46,13 @@ namespace RandomlyGeneratedItems
                         
                         if ((itemDef.tier != randItemContainer.RandItemTier.tier) && run.availableItems.Contains(index))
                         {
-                            run.availableItems.Remove(index);
+                            //run.availableItems.Remove(index);
                             run.availableTier1DropList.Remove(pickupIndex);
                             run.availableTier2DropList.Remove(pickupIndex);
                         }
                         else if (itemDef.tier == randItemContainer.RandItemTier.tier)
                         {
-                            Log.Info("DEBUGGER: Adding " + itemDef.name + " to the drop pools.");
-                            run.availableItems.Add(index);
+                            //run.availableItems.Add(index);
                             run.availableTier1DropList.Add(pickupIndex);
                             run.availableTier2DropList.Add(pickupIndex);
                         }
