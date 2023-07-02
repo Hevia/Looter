@@ -4,12 +4,13 @@ using UnityEngine.Networking;
 using RoR2;
 using UnityEngine.AddressableAssets;
 using System;
+using Newtonsoft.Json.Utilities;
 
 namespace RandomlyGeneratedItems
 {
     class ExampleArtifact : ArtifactBase
     {
-        public RandItemContainer randItemContainer = RandItemContainer.Instance;
+        //public RandItemContainer randItemContainer = RandItemContainer.Instance;
 
         public static string texArtifactCommandDisabled = "RoR2/Base/Command/texArtifactCommandDisabled.png";
         public static string texArtifactCommandEnabled = "RoR2/Base/Command/texArtifactCommandEnabled.png";
@@ -44,15 +45,18 @@ namespace RandomlyGeneratedItems
 
                         PickupIndex pickupIndex = PickupCatalog.FindPickupIndex(index);
                         
-                        if ((itemDef.tier != randItemContainer.RandItemTier.tier) && run.availableItems.Contains(index))
+                        // TODO: Clean this up
+                        if (!itemDef.name.StartsWith("RAND_ITEM_"))
                         {
-                            //run.availableItems.Remove(index);
+                            run.availableItems.Remove(index);
                             run.availableTier1DropList.Remove(pickupIndex);
                             run.availableTier2DropList.Remove(pickupIndex);
                         }
-                        else if (itemDef.tier == randItemContainer.RandItemTier.tier)
+                        else if (itemDef.name.StartsWith("RAND_ITEM_"))
                         {
-                            //run.availableItems.Add(index);
+                            itemDef.hidden = false;
+                            run.availableItems.Add(index);
+                            run.avail
                             run.availableTier1DropList.Add(pickupIndex);
                             run.availableTier2DropList.Add(pickupIndex);
                         }

@@ -3,6 +3,7 @@ using BepInEx.Configuration;
 using BepInEx.Logging;
 using R2API;
 using R2API.Utils;
+using RandomlyGeneratedItems.Tiers;
 using RoR2;
 using System;
 using System.Collections.Generic;
@@ -45,13 +46,14 @@ namespace RandomlyGeneratedItems
 
         public List<ArtifactBase> Artifacts = new List<ArtifactBase>();
 
-        public RandItemContainer randItemContainer = RandItemContainer.Instance;
+        //public RandItemContainer randItemContainer = RandItemContainer.Instance;
 
         public void Awake()
         {
-           
-            R2API.ContentAddition.AddItemTierDef(randItemContainer.RandItemTier);
+            // Add the new item tier to the game
+            //R2API.ContentAddition.AddItemTierDef(randItemContainer.RandItemTier.tier);
           
+            // Init the artifact and add it to the game
             var ArtifactTypes = Assembly.GetExecutingAssembly().GetTypes().Where(type => !type.IsAbstract && type.IsSubclassOf(typeof(ArtifactBase)));
             foreach (var artifactType in ArtifactTypes)
             {
@@ -78,7 +80,8 @@ namespace RandomlyGeneratedItems
                 seed = (ulong)UnityEngine.Random.RandomRangeInt(0, 10000) ^ (ulong)UnityEngine.Random.RandomRangeInt(1, 10) << 16;
             }
 
-            rng = new(seed);
+            //rng = new(seed);
+            rng = new(68154);
             Logger.LogFatal("seed is " + seed);
 
             Buffs.Awake();
@@ -507,8 +510,9 @@ namespace RandomlyGeneratedItems
             itemDef.loreToken = "RAND_ITEM_" + xmlSafeItemName + "_LORE";
             itemDef.pickupModelPrefab = prefab;
             itemDef.pickupIconSprite = icon;
-            itemDef.hidden = false;
-            itemDef._itemTierDef = randItemContainer.RandItemTier;
+            itemDef.hidden = true;
+            itemDef.tier = ItemTier.Tier1;
+            
 
             if (!map.ContainsKey(itemDef.nameToken))
             {
